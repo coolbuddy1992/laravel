@@ -1,0 +1,322 @@
+<?php
+
+namespace App\Http\Controllers;
+use App\assigndata;
+use App\city;
+use App\companies;
+use App\countries;
+use App\defaultsetting;
+use App\employee;
+use App\role;
+use App\role_admin;
+use App\sale;
+use App\state;
+use App\user;
+use Auth;
+use DB;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Input;
+use Redirect;
+use Session;
+use Validator;
+
+class CompanyController extends Controller {
+	/**
+	 * Create a new controller instance.
+	 *
+	 * @return void
+	 */
+	public function __construct() {
+		$this->middleware('auth');
+	}
+	public function companyadd() {
+		$country = countries::all();
+		$sale = sale::all();
+		return view('admin.company.companyadd', compact('country', 'sale'));
+	}
+
+	public function index(Request $request) {
+		$request->session()->forget('company');
+		$request->session()->forget('company_id');
+		$request->session()->forget('companies');
+		if (Auth::user()->role == 'admin') {
+			return Redirect::to('companydata/gci');
+			/*$company = companies::all();
+			return view('admin.company.allcompany', compact('company'));*/
+		} elseif (Auth::user()->role == 'company') {
+			$currentuserid = Auth::user()->id;
+			$company = companies::where('user_id', $currentuserid)->first();
+			session()->put('company', $company->slug);
+			session()->put('company_id', $company->id);
+			session()->put('companies', $company);
+			return view('admin.company.allcompany');
+		} elseif (Auth::user()->role == 'employee') {
+			$employeeid1 = Auth::user()->email;
+			$employeeid = employee::where('emp_email', $employeeid1)->first();
+			$company = companies::where('id', $employeeid->main_id)->first();
+			//
+			return view('admin.company.allcompany');
+		} elseif (Auth::user()->role == 'individual') {
+			// $employeeid1 = Auth::user()->email;
+			// $employeeid = employee::where('emp_email', $employeeid1)->first();
+			// $company = companies::where('id', $employeeid->main_id)->first();
+			//
+			return view('admin.company.allcompany');
+		} elseif (Auth::user()->role == 'sales') {
+			$sale = sale::where('sale_email', Auth::user()->email)->first();
+			$company = companies::where('sale_id', $sale->id)->get();
+			return view('admin.company.allcompany', compact('company'));
+		}
+
+	}
+
+	public function show(Request $request) {
+		$request->session()->forget('company');
+		$request->session()->forget('company_id');
+		$request->session()->forget('companies');
+		if (Auth::user()->role == 'admin') {
+			$company = companies::all();
+			return view('admin.company.allcompany', compact('company'));
+		} elseif (Auth::user()->role == 'company') {
+
+			$currentuserid = Auth::user()->id;
+			//dd(Auth::user()->role);
+			$company = companies::where('user_id', $currentuserid)->first();
+			session()->put('company', $company->slug);
+			session()->put('company_id', $company->id);
+			session()->put('companies', $company);
+			// $company = companies::find($company1->id);
+			//dd(session()->get('company'));
+			return view('admin.company.allcompany');
+		} elseif (Auth::user()->role == 'employee') {
+			$employeeid1 = Auth::user()->email;
+			$employeeid = employee::where('emp_email', $employeeid1)->first();
+			$company = companies::where('id', $employeeid->main_id)->first();
+			// session()->put('company', $company->slug);
+			// session()->put('company_id', $company->id);
+			// session()->put('companies', $company);
+			return view('admin.company.allcompany');
+		} elseif (Auth::user()->role == 'individual') {
+			// $employeeid1 = Auth::user()->email;
+			// $employeeid = employee::where('emp_email', $employeeid1)->first();
+			// $company = companies::where('id', $employeeid->main_id)->first();
+			//
+			return view('admin.company.allcompany');
+		} elseif (Auth::user()->role == 'sales') {
+			$sale = sale::where('sale_email', Auth::user()->email)->first();
+			$company = companies::where('sale_id', $sale->id)->get();
+			// dd($sale->id);
+			return view('admin.company.allcompany', compact('company'));
+		}
+	}
+
+	public function store(Request $request) {
+
+		$rules = array(
+			'name' => 'required',
+		);
+		$validator = Validator::make(Input::all(), $rules);
+
+		if ($validator->fails()) {
+			$messages = $validator->messages();
+			return Redirect::back()->withInput()->withErrors($validator);
+		} elseif ($validator->passes()) {
+
+			$company = new companies;
+
+			$company->company_name = Input::get('name');
+			$company->email = Input::get('email');
+			$company->sale_id = Input::get('sale_team');
+			$company->user_id = Input::get('user_id');
+			$company->company_address = Input::get('address');
+			$company->company_status = Input::get('status');
+			$company->company_city = Input::get('city');
+			$company->company_state = Input::get('state');
+			$company->company_country = Input::get('country');
+			$slugdata = str_slug(Input::get('name'));
+			$slugCount = count($company->whereRaw("slug REGEXP '^{$slugdata}(-[0-9]*)?$'")->get());
+
+			$slugdata = ($slugCount > 0) ? "{$slugdata}-{$slugCount}" : $slugdata;
+			$company->slug = $slugdata;
+			if ($request->hasFile('filename')) {
+				$files = Input::file('filename');
+				$name = time() . "_" . $files->getClientOriginalName();
+				$image = $files->move(public_path() . '/../public_html/images', $name);
+				$company->company_logo = $name;
+			}
+			$company->save();
+
+		}
+		$slugchkuser = user::where('email', Input::get('email'))->get();
+
+		$sluguser = count($slugchkuser);
+
+		if ($sluguser == 1) {
+
+		} else {
+
+			$user = new User;
+
+			$user->username = Input::get('email');
+
+			$user->name = Input::get('name');
+
+			$user->email = Input::get('email');
+
+			$user->password = bcrypt(substr((Input::get('email')), 0, 6));
+
+			$user->role = Input::get('role');
+
+			$user->save();
+
+			//roleid
+			$role = role::where('name', Input::get('role'))->first();
+			//print_r($role->id);exit;
+			//userid
+			$userrole = user::where('role', Input::get('role'))->first();
+
+			$rolea = new role_admin;
+			$rolea->role_id = $role->id;
+			$rolea->admin_id = $userrole->id;
+			$rolea->save();
+
+		}
+		//dd($company);
+		return Redirect::to('allcompany');
+
+	}
+
+	public function edit(Request $request, $id) {
+		$company = companies::find($id);
+		return view('admin.company.edit', compact('company'));
+
+	}
+
+	public function update(Request $request, $id) {
+		// $rules = array(
+		// 	'cname' => 'required',
+		// 	'filename' => 'required|max:2048|mimes:jpeg,jpg,png',
+		// );
+		// $validator = Validator::make(Input::all(), $rules);
+
+		// if ($validator->fails()) {
+		// 	$messages = $validator->messages();
+		// 	return Redirect::back()->withInput()->withErrors($validator);
+		// } elseif ($validator->passes()) {
+
+		$company = companies::find($id);
+
+		$company->company_name = Input::get('cname');
+		$company->user_id = Input::get('user_id');
+		//$company->sale_id = Input::get('sale_team');
+		$company->company_address = Input::get('caddress');
+		$company->company_status = Input::get('cstatus');
+
+		if ($request->hasFile('filename')) {
+			$files = Input::file('filename');
+			$name = time() . "_" . $files->getClientOriginalName();
+			$image = $files->move(public_path() . '/../public_html/images', $name);
+			$company->company_logo = $name;
+		}
+		$slugdata = str_slug(Input::get('cslug'));
+		$slugCount = count($company->whereRaw("slug REGEXP '^{$slugdata}(-[0-9]*)?$'")->where('slug', $company->slug)->where('id', '<>', $company->id)->get());
+
+		$slugdata = ($slugCount > 0) ? "{$slugdata}-{$slugCount}" : $slugdata;
+		$company->slug = $slugdata;
+		$company->save();
+		return Redirect::to('allcompany');
+
+	}
+
+	/**
+	 * Remove the specified resource from storage.
+	 *
+	 * @param  int  $id
+	 * @return \Illuminate\Http\Response
+	 */
+	public function destroy(Request $request) {
+		companies::destroy($request->id);
+		// return Response()->json(['sms' => 'deleted successfully']);
+		return Redirect::to('allcompany');
+	}
+
+	public function companydata($slug) {
+
+		$company = companies::where('slug', $slug)->first();
+		//add session code here
+		session()->put('company', $company->slug);
+		session()->put('company_id', $company->id);
+		session()->put('companies', $company);
+
+		return view('admin.company.companydata');
+	}
+
+	public function getStateList(Request $request) {
+		$state = state::where('country_id', $request->country_id)->pluck('state_name', 'id');
+		return json_encode($state);
+		// dd($state);
+	}
+	public function getCityList(Request $request) {
+		$cities = city::where('state_id', $request->state_id)->pluck('city_name', 'id');
+		return json_encode($cities);
+		// return response()->json($cities);
+	}
+
+	//assignplant
+	public function assignplantation(Request $request, $slug) {
+		$company = companies::where('slug', $slug)->first();
+		return view('admin.company.assignplantation', compact('company'));
+	}
+
+	public function assignplantcomp(Request $request, $slug) {
+		$defaultsetting = defaultsetting::where('user_id', Auth::user()->id)->first();
+		$data = Input::get('name');
+		$rangemin = $defaultsetting->initial_plant + 1;
+		$count = 1;
+
+		if (($defaultsetting->total_plant > $data)) {
+
+			$company = DB::update("update companies set assignplant =assignplant+'" . $data . "' ,total_plant = total_plant+'" . $data . "' where slug = '" . $slug . "'");
+			$company = companies::where('slug', $slug)->first();
+			// $company->assignplant = Input::get('name');
+			// $company->save();
+			//dd($company);
+
+			//updatedata
+			$affected = DB::update("update defaultsettings set initial_plant = initial_plant+" . $data . " where user_id = " . Auth::user()->id);
+			$affectdata = defaultsetting::where('user_id', Auth::user()->id)->first();
+			$rangemax = $count * $affectdata->initial_plant;
+
+			$assigndata = new assigndata;
+			$assigndata->user_id = Auth::user()->id;
+			$assigndata->assign_id = $company->id;
+			$assigndata->dataplant = $data;
+			$assigndata->range_min = $rangemin;
+			$assigndata->range_max = $rangemax;
+			$assigndata->save();
+
+			return redirect('allcompany');
+		} else {
+			$message = Input::get('name');
+			return Redirect::back()->withInput()->withErrors($message);
+
+		}
+
+	}
+	public function plantstatus(Request $request) {
+		$compuser = Auth::user()->id;
+		$company = companies::where('user_id', $compuser)->first();
+		$assigndata = assigndata::where('assign_id', $company->id)->get();
+		// $assigntreedata = assigntreedata::where('range_min', '<=', $treeid)->where('range_max', '>=', $treeid)->orderby('id', 'DESC');
+		$wheretemp = array();
+		foreach ($assigndata as $assigndatas) {
+			$wheretemp[] = "(treeid <='" . $assigndatas->range_max . "' and treeid >='" . $assigndatas->range_min . "')";
+		}
+		$data = implode(' or ', $wheretemp);
+
+		$assigndatatree = DB::select('select * from assigntreedatas join plantation_contents on assigntreedatas.locationid = plantation_contents.pid  where ' . $data);
+
+		return view('admin.plantation.plantstatus', compact('assigndatatree'));
+	}
+
+}
